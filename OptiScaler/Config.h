@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "SysUtils.h"
 #include "State.h"
@@ -884,21 +884,26 @@ class Config
 
     // XeFG
     //
-    // The ceiling for the whole XeFG path, in interpolations: 7 is an 8X
-    // multiplier. This is the limit itself, not a sanity bound with the real one
-    // living somewhere else - FGXeFGMaxInterpolatedFrames defaults to it, the
-    // unlock patches report it to the provider as maxSupportedInterpolations,
-    // and XeFG_Dx12 declares it as the swapchain's maxInterpolatedFrames at init,
-    // so one number decides what the provider accepts, what the menu offers, and
-    // what the ini may ask for.
+    // Ceiling for the whole XeFG path, in interpolations: 5 is a 6X multiplier.
+    // This is the limit itself, not a sanity bound with the real one living
+    // somewhere else - FGXeFGMaxInterpolatedFrames defaults to it, the unlock
+    // patches report it to the provider as maxSupportedInterpolations, and
+    // XeFG_Dx12 declares it as the swapchain's maxInterpolatedFrames at init, so
+    // one number decides what the provider accepts, what the menu offers, and what
+    // the ini may ask for.
     //
-    // It used to be 31 - a bound nothing enforced, so the menu went to 32X while
-    // the provider was still told 31 on every launch. Past 8X the burst outruns
-    // any display and the extra frames only buy latency, so 8X is where it stops.
+    // DO NOT RAISE THIS ABOVE 5 WITHOUT FIXING THE MENU FIRST.
+    // The MFG combo in menu_common.cpp indexes a fixed five-entry label array
+    // ("2X".."6X") while looping i < GetMaxInterpolationCount(), and this value is
+    // the loop bound the menu actually sees, because the unlock writes it into the
+    // provider as maxSupportedInterpolations. Above 5 that loop reads past the end
+    // of the array and hands ImGui a stack value as a label: a freeze, or an access
+    // violation the moment the dropdown is opened.
     //
-    // The patch that raises the provider's reported maximum writes a 4 byte
-    // immediate, so the encoding has never been what limited this.
-    static constexpr int32_t XeFGMaxInterpolations = 7;
+    // 7 (8X) becomes safe again once the combo generates its labels dynamically
+    // instead of indexing the array. Until that lands, the ceiling has to stay at
+    // what the menu can actually render.
+    static constexpr int32_t XeFGMaxInterpolations = 5;
 
     CustomOptional<bool> FGXeFGIgnoreInitChecks { false };
     CustomOptional<int> FGXeFGInterpolationCount { 1 };
@@ -908,15 +913,13 @@ class Config
     // written into the U3/U4/U5 patches is read back as
     // xefg_swapchain_properties_t::maxSupportedInterpolations, and
     // XeFG_Dx12 fills xefg_swapchain_d3d12_init_params_t::maxInterpolatedFrames
-    // from it at swapchain init - so raising the menu ceiling necessarily
-    // declares the same number to the provider at init on every launch.
+    // from it at swapchain init - so the menu ceiling and what the provider is told
+    // are the same number on every launch, not two settings to keep in sync.
     //
-    // It used to be 5, which is what capped the menu at 6X; the ceiling above is
-    // now 8X and is what this defaults to. Setting it lower narrows both the menu
-    // and what the provider is told, which is the supported way to go back down:
-    // if the provider sizes anything from this at init, the symptom would be a
-    // failed init or exhausted VRAM, and a value it rejects is clamped in
-    // XeFGUnlock to the ceiling rather than passed through.
+    // It defaults to the ceiling above. Setting it lower narrows both the menu and
+    // what the provider is told, which is the supported way to go back down; a value
+    // above the ceiling is clamped in XeFGUnlock rather than passed through, so this
+    // cannot be used to exceed what the menu is able to render.
     CustomOptional<int> FGXeFGMaxInterpolatedFrames { XeFGMaxInterpolations };
     CustomOptional<bool> FGXeFGExtraPacing { true };
     CustomOptional<bool> FGXeFGUIComposition { false };
